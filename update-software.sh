@@ -3,6 +3,15 @@ brew update
 brew upgrade
 brew cleanup
 
+# Remove all cached downloads
+brew cleanup --prune=0
+
+# Remove all old versions of installed formulae and casks
+brew cleanup
+
+# Diagnose and fix common issues
+brew doctor
+
 # Schedule THis:
 # ~/Library/LaunchAgents/com.veksler.update-software.plist
 # <?xml version="1.0" encoding="UTF-8"?>

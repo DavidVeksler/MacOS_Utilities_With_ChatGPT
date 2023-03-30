@@ -15,7 +15,6 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
     # Check if the app is managed by Homebrew (case-insensitive search)
     app_managed_by_homebrew=$(brew list --cask | grep -i -E "^$cask_or_formula_name$" || brew list | grep -i -E "^$cask_or_formula_name$")
 
-
     if [[ -z "$app_managed_by_homebrew" ]]; then
       echo "$app_name is available in Homebrew as $cask_or_formula_name but not managed by it."
 
@@ -33,14 +32,26 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
         echo "Removing the existing app: $app"
         rm -rf "$app"
 
-        # Install the Homebrew version
-        echo "Attempting to install the Homebrew version of $app_name..."
-        if brew install --cask "$cask_or_formula_name"; then
+        # Attempt to install the Homebrew version and capture the output and error messages
+        install_output=$(brew install --cask "$cask_or_formula_name" 2>&1)
+
+        # Check the exit status of the brew install command
+        if [[ $? -eq 0 ]]; then
           echo "Success! $app_name replaced with the Homebrew cask version."
-        elif brew install "$cask_or_formula_name"; then
-          echo "Success! $app_name replaced with the Homebrew formula version."
         else
-          echo "Failed to replace $app_name with the Homebrew version."
+          # Check if the error message contains "Permission denied"
+          if echo "$install_output" | grep -q "Permission denied"; then
+            echo "Insufficient permissions to install $app_name. Escalating permissions with sudo."
+            # Attempt to install with sudo
+            if sudo brew install --cask "$cask_or_formula_name"; then
+              echo "Success! $app_name replaced with the Homebrew cask version (with escalated permissions)."
+            else
+              echo "Failed to replace $app_name with the Homebrew cask version, even with escalated permissions."
+            fi
+          else
+            echo "Failed to replace $app_name with the Homebrew cask version."
+            echo "Installation output: $install_output"
+          fi
         fi
       else
         echo "User chose not to replace $app_name with the Homebrew version."
