@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # Get a list of installed apps in /Applications
-installed_apps=$(find /Applications -maxdepth 1 -iname "*.app")
-
-# Check if each app is available in Homebrew
-for app in $installed_apps; do
+find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
   bundle_id=$(mdls -name kMDItemCFBundleIdentifier -raw "$app")
   app_name=$(basename "$app" .app)
 
