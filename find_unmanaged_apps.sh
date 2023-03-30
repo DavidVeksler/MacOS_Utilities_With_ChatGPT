@@ -12,8 +12,9 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
   if brew info "$app_name" >/dev/null 2>&1; then
     cask_or_formula_name="$app_name"
 
-    # Check if the app is managed by Homebrew
-    app_managed_by_homebrew=$(brew list --cask | grep -E "^$cask_or_formula_name$" || brew list | grep -E "^$cask_or_formula_name$")
+    # Check if the app is managed by Homebrew (case-insensitive search)
+    app_managed_by_homebrew=$(brew list --cask | grep -i -E "^$cask_or_formula_name$" || brew list | grep -i -E "^$cask_or_formula_name$")
+
 
     if [[ -z "$app_managed_by_homebrew" ]]; then
       echo "$app_name is available in Homebrew as $cask_or_formula_name but not managed by it."
@@ -34,7 +35,7 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
 
         # Install the Homebrew version
         echo "Attempting to install the Homebrew version of $app_name..."
-        if brew install --cask "$cask_or_formula_name" >/dev/null 2>&1; then
+        if brew install --cask "$cask_or_formula_name"; then
           echo "Success! $app_name replaced with the Homebrew cask version."
         elif brew install "$cask_or_formula_name"; then
           echo "Success! $app_name replaced with the Homebrew formula version."
