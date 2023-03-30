@@ -21,6 +21,12 @@ for app in $installed_apps; do
     if [[ -z "$app_managed_by_homebrew" ]]; then
       echo "$app_name is available in Homebrew as $cask_or_formula_name but not managed by it."
 
+      # Output the package description
+      cask_info=$(brew info --cask "$app_name")
+      echo "Package description:"
+      echo "$cask_info"
+      echo ""
+
       # Prompt the user to replace the app with the Homebrew version
       read -p "Do you want to replace $app_name with the Homebrew version? (y/n) " choice
 
