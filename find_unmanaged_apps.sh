@@ -29,17 +29,25 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
 
       if [[ $choice == "y" ]]; then
         # Remove the existing app
+        echo "Removing the existing app: $app"
         rm -rf "$app"
 
         # Install the Homebrew version
+        echo "Attempting to install the Homebrew version of $app_name..."
         if brew install --cask "$cask_or_formula_name" >/dev/null 2>&1; then
-          echo "$app_name replaced with the Homebrew cask version."
+          echo "Success! $app_name replaced with the Homebrew cask version."
         elif brew install "$cask_or_formula_name"; then
-          echo "$app_name replaced with the Homebrew formula version."
+          echo "Success! $app_name replaced with the Homebrew formula version."
         else
           echo "Failed to replace $app_name with the Homebrew version."
         fi
+      else
+        echo "User chose not to replace $app_name with the Homebrew version."
       fi
+    else
+      echo "$app_name is already managed by Homebrew as $cask_or_formula_name."
     fi
+  else
+    echo "$app_name is not available in Homebrew."
   fi
 done
