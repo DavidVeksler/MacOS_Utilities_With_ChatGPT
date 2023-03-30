@@ -25,7 +25,7 @@ find /Applications -maxdepth 1 -iname "*.app" | while read -r app; do
       echo ""
 
       # Prompt the user to replace the app with the Homebrew version
-      read -p "Do you want to replace $app_name with the Homebrew version? (y/n) " choice
+      read -u 1 -p "Do you want to replace $app_name with the Homebrew version? (y/n) " choice
 
       if [[ $choice == "y" ]]; then
         # Remove the existing app
