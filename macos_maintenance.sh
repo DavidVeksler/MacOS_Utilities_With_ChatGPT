@@ -1,72 +1,89 @@
 #!/bin/bash
 
-set -e
+LOG_FILE="maintenance_$(date '+%Y%m%d_%H%M%S').log"
 
-function print_header() {
-  echo "----------------------------------------"
-  echo "$1"
-  echo "----------------------------------------"
+# Function to log messages and errors
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "${LOG_FILE}"
 }
+
+# Progress indicator with timestamp
+spinner() {
+  local pid=$!
+  local delay=0.1
+  local spinstr='\|/-'
+  local start_time=$(date +%s)
+  while [ "$(ps a | awk '{print $1}' | grep ${pid})" ]; do
+    local temp=${spinstr#?}
+    local elapsed_time=$(( $(date +%s) - start_time ))
+    printf " [%c] Time: %ds " "${spinstr}" "${elapsed_time}"
+    local spinstr=${temp}${spinstr%"${temp}"}
+    sleep ${delay}
+    printf "\b\b\b\b\b\b\b\b\b\b\b"
+  done
+  printf "          \b\b\b\b\b\b\b\b\b\b"
+}
+
+# Prompt for sudo password
+echo "Please enter your sudo password:"
+read -s SUDO_PASSWORD
+echo
 
 # Check if Homebrew is installed
 if ! command -v brew &> /dev/null; then
-  echo "Homebrew is not installed. Install it from https://brew.sh and try again."
+  log "Homebrew is not installed. Install it from https://brew.sh and try again."
   exit 1
 fi
 
 # Check if mas is installed
 if ! command -v mas &> /dev/null; then
-  echo "mas is not installed. Install it using 'brew install mas' and try again."
+  log "mas is not installed. Install it using 'brew install mas' and try again."
   exit 1
 fi
 
 # Update macOS and software
-print_header "Updating macOS and installed software"
-softwareupdate -ia --verbose
-brew update && brew upgrade && brew cleanup
-mas upgrade
+log "Updating macOS and installed software"
+softwareupdate -ia --verbose & spinner
+
+log "Updating Homebrew and installed packages"
+brew update && brew upgrade && brew cleanup & spinner
+
+log "Updating Mac App Store applications"
+mas upgrade & spinner
 
 # Clear system caches
-print_header "Clearing system caches"
-sudo rm -rf /Library/Caches/*
-sudo rm -rf ~/Library/Caches/*
+log "Clearing system caches"
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf /Library/Caches/* & spinner
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf ~/Library/Caches/* & spinner
 
 # Clear logs
-print_header "Clearing system logs"
-sudo rm -rf /private/var/log/*
-sudo rm -rf ~/Library/Logs/*
+log "Clearing system logs"
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf /private/var/log/* & spinner
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf ~/Library/Logs/* & spinner
 
 # Clear temporary files
-print_header "Clearing temporary files"
-sudo rm -rf /private/var/tmp/*
-sudo rm -rf /private/var/folders/*
-sudo rm -rf /tmp/*
+log "Clearing temporary files"
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf /private/var/tmp/* & spinner
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf /private/var/folders/* & spinner
+echo "${SUDO_PASSWORD}" | sudo -S rm -rf /tmp/* & spinner
 
-# Clear browser caches (Safari, Chrome, and Firefox)
-print_header "Clearing browser caches"
-rm -rf ~/Library/Safari/LocalStorage
-rm -rf ~/Library/Caches/com.apple.Safari
-rm -rf ~/Library/Caches/com.apple.WebKit.PluginProcess
-rm -rf ~/Library/Caches/Google/Chrome
-rm -rf ~/Library/Caches/Mozilla/Firefox
+# Clear browser caches (Safari, Chrome, Firefox, Edge, and Brave)
+log "Clearing browser caches"
+rm -rf ~/Library/Safari/LocalStorage & spinner
+rm -rf ~/Library/Caches/com.apple.Safari & spinner
+rm -rf ~/Library/Caches/com.apple.WebKit.PluginProcess & spinner
+rm -rf ~/Library/Caches/Google/Chrome & spinner
+rm -rf ~/Library/Caches/Mozilla/Firefox & spinner
+rm -rf ~/Library/Caches/MicrosoftEdge & spinner
+rm -rf ~/Library/Caches/BraveSoftware/Brave-Browser & spinner
 
 # Optimize system performance
-print_header "Optimizing system performance"
-sudo periodic daily weekly monthly
+log "Optimizing system performance"
+echo "${SUDO_PASSWORD}" | sudo periodic daily weekly monthly & spinner
 
 # Verify and repair disk permissions
-print_header "Verifying and repairing disk permissions"
-sudo diskutil verifyVolume /
-sudo diskutil repairVolume /
-
-# Run maintenance scripts
-print_header "Running maintenance scripts"
-sudo /usr/libexec/locate.updatedb
-
-# Check for potential issues
-print_header "Checking for potential issues"
-brew doctor
-brew missing
-mas outdated
+log "Verifying and repairing disk permissions"
+echo "${SUDO_PASSWORD}" | sudo diskutil verifyVolume / & spinner
+echo "${SUDO_PASSWORD}" | sudo diskutil repairVolume / & spinner
 
 echo "System maintenance complete."
