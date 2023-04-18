@@ -12,6 +12,10 @@ brew cleanup
 # Diagnose and fix common issues
 brew doctor
 
+softwareupdate -ia --verbose
+
+mas upgrade
+
 # Schedule THis:
 # ~/Library/LaunchAgents/com.veksler.update-software.plist
 # <?xml version="1.0" encoding="UTF-8"?>
