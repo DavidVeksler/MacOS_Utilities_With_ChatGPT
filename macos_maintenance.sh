@@ -28,9 +28,8 @@ spinner() {
     printf "\b%.0s" {1..${prev_spin_length}}
   done
   printf " %.0s" {1..${prev_spin_length}}
-  printf "\b%.0s" {1..${prev_spin_length}}
+  printf "\r\033[K"
 }
-
 
 # Check if Homebrew is installed
 if ! command -v brew &> /dev/null; then
@@ -76,6 +75,7 @@ rm -rf ~/Library/Safari/LocalStorage 2>/dev/null & spinner
 rm -rf ~/Library/Caches/com.apple.Safari 2>/dev/null & spinner
 rm -rf ~/Library/Caches/com.apple.WebKit.PluginProcess 2>/dev/null & spinner
 rm -rf ~/Library/Caches/com.apple.WebKit.WebContent 2>/dev/null & spinner
+rm -rf ~/Library/Caches/com.apple.WebKit.WebContent 2>/dev/null & spinner
 rm -rf ~/Library/Caches/com.google.Chrome 2>/dev/null & spinner
 rm -rf ~/Library/Caches/Google/Chrome 2>/dev/null & spinner
 rm -rf ~/Library/Caches/Mozilla/Firefox 2>/dev/null & spinner
@@ -102,8 +102,8 @@ echo $PASSWORD | sudo -S diskutil repairVolume / & spinner
 # mdutil -i on / > /dev/null 2>&1 && print_success "Spotlight index reset" || print_error "Resetting Spotlight index failed"
 
 # Empty the trash
-print_info "Emptying the trash"
-rm -rf ~/.Trash/* > /dev/null 2>&1 && print_success "Trash emptied" || print_error "Trash emptying failed"
+echo "Emptying the trash"
+rm -rf ~/.Trash/* > /dev/null 2>&1 && echo "Trash emptied" || echo "Trash emptying failed"
 
 
 # System maintenance complete
