@@ -24,9 +24,6 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-# Initialize an empty string to store the years
-years=""
-
 # Function to process a file
 process_file() {
     local file=$1
@@ -50,14 +47,11 @@ process_file() {
         # Change the creation and modification date of the file
         SetFile -d "$date_str" -m "$date_str" "$file"
 
-        # Change the creation and modification date of the parent directory
+        # Change the creation and modification date of the parent directory (+1 level up)
         dirname=$(dirname "$file")
+        parent_dir=$(dirname "$dirname")
         SetFile -d "$date_str" -m "$date_str" "$dirname"
-
-        echo "$year"
-
-        # Add the year to the list
-        years+="$year, "
+        SetFile -d "$date_str" -m "$date_str" "$parent_dir"
     else
         echo "Invalid year '$year' in file $file"
     fi
@@ -67,6 +61,3 @@ process_file() {
 find "$1" -type f \( -iname "*.mp3" -o -iname "*.aac" \) | while read -r file; do
     process_file "$file"
 done
-
-# Print the list of years
-echo "Years of updated files: ${years%, }"
