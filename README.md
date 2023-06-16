@@ -11,6 +11,10 @@ Utilities
 -   update-software.sh: Updates Homebrew apps as a scheduled task.
 -   looping_script.sh: A helper script to run bash scripts in a loop.
 -   macos_maintenance.sh: Performs MacOS maintenance tasks like cleaning temporary files, updating MacOS software, and more.
+-   delete_dead_tracks_applescript: Deletes deleted files from Apple Music.
+-   remove_duplicate_tracks_applescript: Removes duplicate tracks in Apple Music.
+-   delete_empty_folders.sh: Deletes any empty folders in a specified directory.
+-   file_dates_should_match_id3_tags.sh: Updates the file and folder dates to match the metadata in mp3, aac, and m4a files.
 
 Installation
 ------------
