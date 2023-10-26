@@ -16,6 +16,8 @@ softwareupdate -ia --verbose
 
 mas upgrade
 
+open /Applications/Latest.app
+
 # Schedule THis:
 # ~/Library/LaunchAgents/com.veksler.update-software.plist
 # <?xml version="1.0" encoding="UTF-8"?>
