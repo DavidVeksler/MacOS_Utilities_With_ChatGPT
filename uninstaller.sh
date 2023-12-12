@@ -2,49 +2,108 @@
 
 # Function to handle file operations
 handle_files() {
-    local path="$1" app_name="$2" dry_run="$3"
+    local path="$1" app_name="$2" delete_confirmed="$3"
     while IFS= read -r -d '' file; do
-        [ "$dry_run" = true ] && echo "[Dry Run] Would remove: $file" || {
-            echo "Removing: $file"
-            rm -rf "$file" || echo "Error removing $file. You might need higher permissions."
-        }
-    done < <(find "$path" -name "*$app_name*" -print0 2>/dev/null)
+        local filesize=$(du -sh "$file" 2>/dev/null | cut -f1)
+
+        if [ "$delete_confirmed" = false ]; then
+            echo "[Dry Run] Found: $file (Size: $filesize)"
+        else
+            echo "Removing: $file (Size: $filesize)"
+            if rm -rf "$file"; then
+                echo "Successfully removed: $file"
+            else
+                echo "Error removing $file. You might need higher permissions."
+            fi
+        fi
+    done < <(find "$path" -iname "*$app_name*" -print0 2>/dev/null)
+}
+
+
+
+# Function to check for running processes of the app
+check_running_processes() {
+    local app_name="$1"
+    if pgrep -f "$app_name" > /dev/null; then
+        echo "Warning: There are running processes related to $app_name."
+        echo "It's recommended to close these processes before proceeding."
+        return 1
+    else
+        return 0
+    fi
+}
+
+# Function to check if the app is a Homebrew cask
+check_homebrew_cask() {
+    local app_name="$1"
+    # Run the check as a regular user
+    if su "$(logname)" -c "brew list --cask | grep -q '^$app_name\$'"; then
+        echo "This application is managed by Homebrew."
+        echo "Please exit root mode and use 'brew uninstall $app_name' to uninstall it."
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Function to uninstall an app
 uninstall_app() {
-    local app_name="$1" dry_run="$2"
+    local app_name="$1"
     local app_path="/Applications/$app_name.app"
-    local system_app_path="/System/Applications/$app_name.app"
 
-    # Check for app existence in /Applications and /System/Applications
-    if [ ! -d "$app_path" ]; then
-        echo "Error: $app_name not found in /Applications."
-        exit 1
-    elif [ -d "$system_app_path" ]; then
-        echo "Error: $app_name is a system application and cannot be uninstalled."
-        exit 1
+     # Check if the app is a Homebrew cask
+    if check_homebrew_cask "$app_name"; then
+        exit 0
     fi
 
-    # Check for special permissions or attributes
-    if [ -n "$(xattr -l "$app_path" | grep -E 'restricted|system')" ]; then
-        echo "Error: $app_name has restricted system permissions and cannot be uninstalled."
-        exit 1
+    # Check for running processes
+    # if ! check_running_processes "$app_name"; then
+    #     echo "Abort uninstallation due to running processes."
+    #     exit 1
+    # fi
+
+    echo "Performing dry run for uninstalling $app_name..."
+
+    # Dry run for main application bundle
+    if [ -d "$app_path" ]; then
+        local app_size=$(du -sh "$app_path" 2>/dev/null | cut -f1)
+        echo "[Dry Run] Found: $app_path (Size: $app_size)"
     fi
 
-    echo "Uninstalling $app_name..."
-    [ "$dry_run" = true ] && echo "[Dry Run] Would remove application: $app_path" || {
-        echo "Removing application: $app_path"
-        rm -rf "$app_path" || echo "Error removing $app_path. You might need higher permissions."
-    }
-
+    # Dry run for associated files
     for dir in ~/Library/Application\ Support ~/Library/Caches ~/Library/Preferences; do
         echo "Searching for associated files in $dir"
-        handle_files "$dir" "$app_name" "$dry_run"
+        handle_files "$dir" "$app_name" false
     done
+
+    # Ask for confirmation to proceed with actual deletion
+    read -p "Proceed with actual uninstallation? (y/N): " confirm
+    if [[ $confirm =~ ^[Yy]$ ]]; then
+        echo "Proceeding with actual uninstallation..."
+
+        # Delete main application bundle
+        if [ -d "$app_path" ]; then
+            echo "Removing application: $app_path"
+            if rm -rf "$app_path"; then
+                echo "Successfully removed: $app_path"
+            else
+                echo "Error removing $app_path. You might need higher permissions."
+            fi
+        fi
+
+        # Delete associated files
+        for dir in ~/Library/Application\ Support ~/Library/Caches ~/Library/Preferences; do
+            echo "Removing associated files in $dir"
+            handle_files "$dir" "$app_name" true
+        done
+    else
+        echo "Uninstallation aborted by user."
+        exit 0
+    fi
 
     echo "$app_name has been processed."
 }
+
 
 # Check if the script is run with necessary permissions
 if [ "$EUID" -ne 0 ]; then
@@ -53,10 +112,9 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Main execution block
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <AppName> <dry_run>"
-    echo "Example: $0 'YourAppNameHere' true  # Dry run mode"
-    echo "Example: $0 'YourAppNameHere' false # Actual uninstall"
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <AppName>"
+    echo "Example: $0 'YourAppNameHere'"
     exit 1
 fi
 
