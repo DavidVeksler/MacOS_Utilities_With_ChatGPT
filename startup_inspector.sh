@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Description: This script lists non-Apple startup items, including login items, launch agents, and daemons on a macOS system.
+
 # ANSI Color Codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
