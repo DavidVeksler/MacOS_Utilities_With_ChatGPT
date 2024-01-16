@@ -6,6 +6,13 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Check for osascript
+if ! command -v osascript &> /dev/null
+then
+    echo -e "${RED}osascript not found. This script requires osascript to run.${NC}"
+    exit 1
+fi
+
 # Function to list non-Apple Login Items with additional info
 list_login_items() {
     echo -e "${GREEN}Non-Apple Login Items:${NC}"
@@ -37,20 +44,19 @@ list_launch_agents_daemons() {
 
     # System-level Agents and Daemons
     echo -e "${BLUE}System-level:${NC}"
-    find /System/Library/Launch{Agents,Daemons} -type f | grep -v "com.apple." | while read -r file; do
+    find /System/Library/Launch{Agents,Daemons} -type f | grep -v "com.apple." | while IFS= read -r file; do
         ls -lh "$file" | awk -v file="$file" '{print file ": " $5 ", Last Modified: " $6 " " $7 " " $8}'
     done
 
     # User-level Agents
     echo -e "${BLUE}User-level:${NC}"
-    find ~/Library/LaunchAgents -type f | grep -v "com.apple." | while read -r file; do
+    find ~/Library/LaunchAgents -type f | grep -v "com.apple." | while IFS= read -r file; do
         ls -lh "$file" | awk -v file="$file" '{print file ": " $5 ", Last Modified: " $6 " " $7 " " $8}'
     done
     echo ""
 }
 
-
-# List the items
+# Main execution
 echo -e "${GREEN}Detailed Non-Apple Startup Items Report${NC}"
 echo "Generated on $(date)"
 echo ""
