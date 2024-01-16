@@ -10,17 +10,25 @@ NC='\033[0m' # No Color
 list_login_items() {
     echo -e "${GREEN}Non-Apple Login Items:${NC}"
     # Using AppleScript to fetch login item names and paths
-    osascript <<EOF
-   tell application "System Events"
-	set loginItemsList to {}
-	repeat with theItem in login items
-		set the end of loginItemsList to (name of theItem & " : " & path of theItem)
-	end repeat
+    osascript <<EOF | grep -v "Apple" | while IFS= read -r line; do
+tell application "System Events"
+    set loginItemsList to every login item
+    set output to ""
+    repeat with theItem in loginItemsList
+        set theName to name of theItem
+        if theName does not contain "Apple" then
+            set thePath to path of theItem
+            set output to output & theName & " : " & thePath & linefeed
+        end if
+    end repeat
+    return output
 end tell
-
-return loginItemsList
-
 EOF
+        # Process and format each line of AppleScript output
+        IFS=' : ' read -r name path <<< "$line"
+        # Format and print the name and path
+        printf "%-30s : %s\n" "$name" "$path"
+    done
 }
 
 # Function to list non-Apple Launch Agents and Daemons with additional info
