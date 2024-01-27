@@ -3,8 +3,11 @@
 # Function to handle file operations
 handle_files() {
     local path="$1" app_name="$2" delete_confirmed="$3"
+    local files_found=0 # Flag to check if files are found
+
     while IFS= read -r -d '' file; do
         local filesize=$(du -sh "$file" 2>/dev/null | cut -f1)
+        files_found=1 # Set the flag as files are found
 
         if [ "$delete_confirmed" = false ]; then
             echo "[Dry Run] Found: $file (Size: $filesize)"
@@ -16,7 +19,13 @@ handle_files() {
                 echo "Error removing $file. You might need higher permissions."
             fi
         fi
-    done < <(find "$path" -iname "*$app_name*" -print0 2>/dev/null)
+     done < <(find "$path" -iname "*$app_name*" -print0 -not -path "*/Library/Application Support/*Browser*/Default/Extensions/*" 2>/dev/null)
+
+    if [ "$files_found" -eq 0 ]; then
+        echo "Error: No files associated with $app_name found for removal."
+        return 1 # Return with error if no files found
+    fi
+    return 0 # Success
 }
 
 
@@ -70,11 +79,19 @@ uninstall_app() {
         echo "[Dry Run] Found: $app_path (Size: $app_size)"
     fi
 
+    local files_found=0
     # Dry run for associated files
     for dir in ~/Library/Application\ Support ~/Library/Caches ~/Library/Preferences; do
         echo "Searching for associated files in $dir"
-        handle_files "$dir" "$app_name" false
+        if handle_files "$dir" "$app_name" false; then
+            files_found=1
+        fi
     done
+
+    if [ "$files_found" -eq 0 ] && [ ! -d "$app_path" ]; then
+        echo "Error: No files or applications found to uninstall."
+        exit 1
+    fi
 
     # Ask for confirmation to proceed with actual deletion
     read -p "Proceed with actual uninstallation? (y/N): " confirm
