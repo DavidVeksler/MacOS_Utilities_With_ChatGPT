@@ -19,7 +19,7 @@ handle_files() {
                 echo "Error removing $file. You might need higher permissions."
             fi
         fi
-     done < <(find "$path" -iname "*$app_name*" -print0 -not -path "*/Library/Application Support/*Browser*/Default/Extensions/*" 2>/dev/null)
+    done < <(find "$path" -iname "*$app_name*" -print0 -not -path "*/Library/Application Support/*Browser*/Default/Extensions/*" 2>/dev/null)
 
     if [ "$files_found" -eq 0 ]; then
         echo "Error: No files associated with $app_name found for removal."
