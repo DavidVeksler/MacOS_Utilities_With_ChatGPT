@@ -22,7 +22,7 @@ def setup_logging():
 def run_command(command):
     try:
         result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        logging.info(f"Command '{' '.join(command)}' executed successfully in {result.returncode} seconds.")
+        logging.info(f"Command '{' '.join(command)}' executed successfully.")
         return result.stdout
     except subprocess.CalledProcessError as e:
         logging.error(f"Command failed: {' '.join(command)} | Error: {e.stderr}")
@@ -53,9 +53,14 @@ def is_chocolatey_installed():
         logging.info("Chocolatey not found.")
         return False
 
+def update_windows_store():
+    logging.info("Updating Microsoft Store apps...")
+    store_update_cmd = ["powershell", "-Command", "Get-AppxPackage | Foreach { Update-AppxPackage $_.PackageFullName }"]
+    return run_command(store_update_cmd)
+
 def run_updates_concurrently():
     with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(update_windows), executor.submit(update_winget_packages)]
+        futures = [executor.submit(update_windows), executor.submit(update_winget_packages), executor.submit(update_windows_store)]
         if is_chocolatey_installed():
             futures.append(executor.submit(update_chocolatey_packages))
         
