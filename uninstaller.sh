@@ -66,10 +66,10 @@ uninstall_app() {
     fi
 
     # Check for running processes
-     if ! check_running_processes "$app_name"; then
-         echo "Abort uninstallation due to running processes."
-         exit 1
-     fi
+    #  if ! check_running_processes "$app_name"; then
+    #      echo "Abort uninstallation due to running processes."
+    #      exit 1
+    #  fi
 
     echo "Performing dry run for uninstalling $app_name..."
 
