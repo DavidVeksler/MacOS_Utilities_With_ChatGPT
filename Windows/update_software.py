@@ -138,7 +138,16 @@ class PhaseResult:
 
 def prep_windows_update_module():
     logging.info("Preparing PSWindowsUpdate module and providers...")
-    run_powershell("Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force", ignore_errors=True, timeout=180)
+    # Ensure TLS 1.2 and robust NuGet provider bootstrap (avoids transient provider errors)
+    run_powershell(
+        "$ErrorActionPreference='SilentlyContinue';"
+        "try { [Net.ServicePointManager]::SecurityProtocol = "
+        "[Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls } catch {};"
+        "try { if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) { "
+        "Get-PackageProvider -Name NuGet -ForceBootstrap -Force | Out-Null } } catch {}",
+        ignore_errors=True,
+        timeout=180,
+    )
     run_powershell("Install-Module -Name PSWindowsUpdate -Force -AllowClobber -Scope AllUsers", ignore_errors=True, timeout=600)
 
 
@@ -162,7 +171,11 @@ def update_winget_packages(include_msstore=True, timeout=None, retries=DEFAULT_R
         return 0
     logging.info("Updating Winget sources and packages...")
     run_command(["winget", "source", "update"], ignore_errors=True, timeout=timeout, retries=retries)
-    pre_list = run_command(["winget", "list", "--upgrades", "--accept-source-agreements"], ignore_errors=True, timeout=timeout, retries=1)
+    # Use `winget upgrade` to list available upgrades (modern CLI replaces `list --upgrades`)
+    pre_list = run_command([
+        "winget", "upgrade", "--include-unknown",
+        "--accept-source-agreements", "--accept-package-agreements"
+    ], ignore_errors=True, timeout=timeout, retries=1)
     pre_count = 0
     if pre_list:
         lines = [l for l in pre_list.splitlines() if l.strip() and not l.lower().startswith("name ")]
