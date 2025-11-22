@@ -11,6 +11,24 @@ LOG_FILE="${HOME}/update-software.log"
 echo "==> Starting update process at $(date)" | tee "$LOG_FILE"
 echo ""
 
+# Request sudo access once and keep it alive
+echo "==> Requesting administrative privileges..."
+sudo -v
+
+# Keep sudo alive in background until script completes
+PARENT_PID=$$
+while true; do
+    sudo -n true
+    sleep 50
+    kill -0 "$PARENT_PID" 2>/dev/null || exit
+done 2>/dev/null &
+SUDO_KEEPER_PID=$!
+
+# Ensure sudo keeper is killed on script exit
+trap "kill $SUDO_KEEPER_PID 2>/dev/null" EXIT INT TERM
+
+echo ""
+
 # Casks to skip (add problematic casks here)
 SKIP_CASKS="logitune"
 
@@ -28,7 +46,7 @@ brew upgrade 2>&1 | tee -a "$LOG_FILE"
 # Clean up broken cask installations before upgrading
 echo ""
 echo "==> Checking for broken cask installations..."
-BROKEN_CASKS=$(brew list --cask 2>/dev/null | while read cask; do
+BROKEN_CASKS=$(brew list --cask 2>/dev/null | while read -r cask; do
     if ! brew info --cask "$cask" >/dev/null 2>&1; then
         echo "$cask"
     fi
@@ -99,8 +117,8 @@ else
             echo "  Reinstalling $cask..."
             if brew install --cask "$cask" 2>&1 | tee -a "$LOG_FILE"; then
                 echo "${GREEN}✓ Successfully reinstalled $cask${NC}"
-                # Remove from failed list
-                FAILED_CASKS=$(echo "$FAILED_CASKS" | sed "s/$cask//")
+                # Remove from failed list (using word boundaries and cleanup extra spaces)
+                FAILED_CASKS=$(echo "$FAILED_CASKS" | sed "s/\<$cask\>//g" | tr -s ' ' | sed 's/^ //;s/ $//')
             else
                 echo "${RED}✗ Failed to reinstall $cask${NC}"
             fi
@@ -131,20 +149,26 @@ brew untap homebrew/services 2>/dev/null || echo "No deprecated taps to remove"
 # Clean up any leftover caskroom directories from failed installs
 echo ""
 echo "==> Cleaning up orphaned caskroom directories..."
-for cask_dir in /opt/homebrew/Caskroom/*; do
-    if [ -d "$cask_dir" ]; then
-        cask_name=$(basename "$cask_dir")
-        if ! brew list --cask 2>/dev/null | grep -q "^${cask_name}$"; then
-            echo "${YELLOW}  Removing orphaned directory: $cask_dir${NC}"
-            rm -rf "$cask_dir" 2>&1 | tee -a "$LOG_FILE" || true
+BREW_PREFIX=$(brew --prefix 2>/dev/null)
+if [ -n "$BREW_PREFIX" ] && [ -d "$BREW_PREFIX/Caskroom" ]; then
+    for cask_dir in "$BREW_PREFIX/Caskroom"/*; do
+        # Check if glob matched any files (avoid literal string if dir is empty)
+        if [ -e "$cask_dir" ] && [ -d "$cask_dir" ]; then
+            cask_name=$(basename "$cask_dir")
+            if ! brew list --cask 2>/dev/null | grep -q "^${cask_name}$"; then
+                echo "${YELLOW}  Removing orphaned directory: $cask_dir${NC}"
+                sudo rm -rf "$cask_dir" 2>&1 | tee -a "$LOG_FILE" || true
+            fi
         fi
-    fi
-done
+    done
+else
+    echo "No Caskroom directory found, skipping."
+fi
 
 # List deprecated software for user awareness
 echo ""
 echo "==> Checking for deprecated software..."
-DEPRECATED_CASKS=$(brew list --cask 2>/dev/null | while read cask; do
+DEPRECATED_CASKS=$(brew list --cask 2>/dev/null | while read -r cask; do
     if brew info --cask "$cask" 2>&1 | grep -qi "deprecated\|disabled"; then
         echo "$cask"
     fi
@@ -155,7 +179,7 @@ if [ -n "$DEPRECATED_CASKS" ]; then
     echo "$DEPRECATED_CASKS" | sed 's/^/  - /'
 fi
 
-DEPRECATED_FORMULAE=$(brew list --formula 2>/dev/null | while read formula; do
+DEPRECATED_FORMULAE=$(brew list --formula 2>/dev/null | while read -r formula; do
     if brew info --formula "$formula" 2>&1 | grep -qi "deprecated\|disabled"; then
         echo "$formula"
     fi
@@ -174,7 +198,7 @@ brew doctor 2>&1 | tee -a "$LOG_FILE" || echo "${YELLOW}⚠️  brew doctor foun
 # macOS software updates
 echo ""
 echo "==> Checking for macOS updates..."
-echo "${YELLOW}Note: This may require sudo password and system restart${NC}"
+echo "${YELLOW}Note: Installing updates may require a system restart${NC}"
 if softwareupdate -l 2>&1 | grep -q "No new software available"; then
     echo "No macOS updates available."
 else
