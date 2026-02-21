@@ -243,51 +243,54 @@ def prep_windows_update_module():
 
 def _winget_upgrades_available(timeout: int | None, retries: int) -> tuple[int, list[str]]:
     """Return (count, package_names) of available winget upgrades.
-    Tries JSON output first, falls back to text parsing."""
-    # Try JSON output first
+    Uses text parsing of winget upgrade output. Captures output even on
+    non-zero exit codes since winget returns non-zero when upgrades exist."""
     try:
-        json_out = run_command(
+        result = subprocess.run(
             [
-                "winget", "upgrade",
-                "--output", "json",
-                "--include-unknown",
-                "--accept-source-agreements",
-                "--accept-package-agreements",
+                "winget", "upgrade", "--include-unknown",
+                "--accept-source-agreements", "--accept-package-agreements",
             ],
-            ignore_errors=True,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
             timeout=timeout,
-            retries=1,
         )
-        if json_out:
-            data = json.loads(json_out)
-            sources = data.get("Sources", [])
-            packages = []
-            for source in sources:
-                for pkg in source.get("Packages", []):
-                    name = pkg.get("PackageIdentifier", pkg.get("Name", "unknown"))
-                    packages.append(name)
-            return len(packages), packages
-    except (json.JSONDecodeError, KeyError, TypeError):
-        pass
-
-    # Fallback: text parsing
-    pre_list = run_command(
-        [
-            "winget", "upgrade", "--include-unknown",
-            "--accept-source-agreements", "--accept-package-agreements",
-        ],
-        ignore_errors=True,
-        timeout=timeout,
-        retries=1,
-    )
-    if pre_list:
-        lines = [
-            l for l in pre_list.splitlines()
-            if l.strip() and not l.lower().startswith("name ")
-        ]
-        count = max(0, len(lines) - 1) if len(lines) > 1 else 0
-        return count, []
-    return 0, []
+        raw = (result.stdout or "").strip()
+        if not raw:
+            return 0, []
+        lines = raw.splitlines()
+        # Find the header line (contains "Name" and "Id" or "Available")
+        header_idx = -1
+        for i, line in enumerate(lines):
+            lo = line.lower()
+            if "name" in lo and ("id" in lo or "available" in lo):
+                header_idx = i
+                break
+        if header_idx < 0:
+            return 0, []
+        # Find the separator line (all dashes) after header
+        data_start = header_idx + 1
+        if data_start < len(lines) and set(lines[data_start].strip()) <= {"-", " "}:
+            data_start += 1
+        # Count data lines (skip footer lines like "X upgrades available")
+        packages = []
+        for line in lines[data_start:]:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # Footer lines typically contain "upgrades available" or similar
+            lo = stripped.lower()
+            if "upgrades available" in lo or "upgrade(s) available" in lo:
+                continue
+            if "upgrade individually" in lo or "winget upgrade" in lo:
+                continue
+            packages.append(stripped)
+        return len(packages), []
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        logging.warning(f"Failed to check winget upgrades: {e}")
+        return 0, []
 
 
 def update_winget_packages(
@@ -354,22 +357,45 @@ def update_chocolatey_packages(
         return 0
 
     # Check for outdated packages first
-    outdated_out = run_command(
-        ["choco", "outdated", "-r"], ignore_errors=True, timeout=timeout, retries=1
-    )
+    outdated_out = None
+    outdated_check_failed = False
+    try:
+        result = subprocess.run(
+            ["choco", "outdated", "-r"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            outdated_out = (result.stdout or "").strip()
+        else:
+            outdated_check_failed = True
+            logging.warning(
+                f"choco outdated check failed (rc={result.returncode}). "
+                "Will attempt upgrade anyway."
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        outdated_check_failed = True
+        logging.warning(f"choco outdated check failed: {e}. Will attempt upgrade anyway.")
+
     outdated_count = 0
     if outdated_out:
         outdated_lines = [l for l in outdated_out.splitlines() if l.strip()]
         outdated_count = len(outdated_lines)
 
     if dry_run:
-        logging.info(f"[DRY RUN] Chocolatey: {outdated_count} outdated package(s)")
+        if outdated_check_failed:
+            logging.info("[DRY RUN] Chocolatey: outdated check failed, would attempt upgrade")
+        else:
+            logging.info(f"[DRY RUN] Chocolatey: {outdated_count} outdated package(s)")
         if outdated_out:
             for line in outdated_out.splitlines()[:20]:
                 logging.info(f"[DRY RUN]   {line}")
         return outdated_count
 
-    if outdated_count == 0:
+    if outdated_count == 0 and not outdated_check_failed:
         logging.info("All Chocolatey packages up to date. Skipping upgrade.")
         return 0
 
