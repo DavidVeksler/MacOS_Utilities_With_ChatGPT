@@ -43,8 +43,11 @@ def is_admin():
 
 
 def run_as_admin():
+    # list2cmdline quotes each argument so paths/args containing spaces survive
+    # the round-trip through ShellExecuteW.
+    params = subprocess.list2cmdline(sys.argv)
     result = ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        None, "runas", sys.executable, params, None, 1
     )
     if result <= 32:
         logging.error(
@@ -270,11 +273,13 @@ def _winget_upgrades_available(timeout: int | None, retries: int) -> tuple[int, 
                 break
         if header_idx < 0:
             return 0, []
+        # Column offset where "Id" begins, so we can slice out just the Name column.
+        id_col = lines[header_idx].lower().find("id")
         # Find the separator line (all dashes) after header
         data_start = header_idx + 1
         if data_start < len(lines) and set(lines[data_start].strip()) <= {"-", " "}:
             data_start += 1
-        # Count data lines (skip footer lines like "X upgrades available")
+        # Collect data lines (skip footer lines like "X upgrades available")
         packages = []
         for line in lines[data_start:]:
             stripped = line.strip()
@@ -286,8 +291,9 @@ def _winget_upgrades_available(timeout: int | None, retries: int) -> tuple[int, 
                 continue
             if "upgrade individually" in lo or "winget upgrade" in lo:
                 continue
-            packages.append(stripped)
-        return len(packages), []
+            name = line[:id_col].strip() if id_col > 0 else stripped
+            packages.append(name or stripped)
+        return len(packages), packages
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
         logging.warning(f"Failed to check winget upgrades: {e}")
         return 0, []
@@ -797,7 +803,7 @@ def parse_args():
     )
     parser.add_argument(
         "--only", default="",
-        help="Comma-separated phases to run: preflight,winget,choco,store,winupdate,health,cleanup",
+        help="Comma-separated phases to run: winget,choco,store,winupdate,health,cleanup",
     )
     parser.add_argument(
         "--timeout", type=int, default=0,
